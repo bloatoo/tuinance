@@ -2,6 +2,12 @@ use tuinance::{
     event::*,
 };
 
+use yahoo_finance::Streamer;
+
+use ordered_float::OrderedFloat;
+
+use std::sync::mpsc;
+
 use tui::{
     backend::CrosstermBackend,
     layout::{
@@ -14,16 +20,20 @@ use tui::{
         Style,
         Color
     },
-    text::Span,
+    text::{Text, Span},
     widgets::{
         Axis,
+        Borders,
         Block,
         Chart,
         Dataset,
-        GraphType
+        GraphType,
+        Paragraph
     },
     Terminal,
 };
+
+use futures::{future, StreamExt};
 
 use crossterm::{
     ExecutableCommand,
@@ -49,6 +59,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let events = Events::new(1000);
 
+    let streamer = Streamer::new(vec!["AAPL"]);
+    let (mut tx, rx) = mpsc::channel();
+
+    tokio::spawn(async move {
+        streamer.stream().await
+        .for_each(move |quote| {
+            //tx.send(format!("At {}, {} is trading for ${}", quote.timestamp, quote.symbol, quote.price)).unwrap();
+            tx.send(quote.price).unwrap();
+            future::ready(())
+        })
+        .await;
+    });
+
+
     let mut chunks = Layout::default()
         .direction(Direction::Horizontal)
         .constraints(vec![
@@ -56,18 +80,29 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             Constraint::Percentage(80)
         ]).split(size);
 
+    let mut data: Vec<OrderedFloat<f64>> = vec![];
+
     loop {
+        let floats: Vec<(f64, f64)> = data.iter().enumerate()
+            .map(|(idx, &elem)| (idx as f64 + 1.0, f64::from(elem)))
+            .collect();
+
+        let p = &OrderedFloat::from(0.0);
+
+        let min = f64::from(data.iter().min().unwrap_or(&p).clone());
+        let max = f64::from(data.iter().max().unwrap_or(&p).clone());
+
         let datasets = vec![
             Dataset::default()
             .name("data1")
                 .marker(symbols::Marker::Dot)
                 .graph_type(GraphType::Line)
                 .style(Style::default().fg(Color::Yellow))
-                .data(&[(0.0, 42000.0), (1.0, 47000.0), (2.0, 43000.0), (3.0, 49000.0), (4.0, 48000.0), (5.0, 47500.0), (6.0, 43000.0)]),
+                .data(&floats),
         ];
 
         let chart = Chart::new(datasets)
-            .block(Block::default().title("Chart"))
+            .block(Block::default().title("Chart").borders(Borders::ALL))
             .x_axis(Axis::default()
                 .title(Span::styled("X Axis", Style::default().fg(Color::Red)))
                 .style(Style::default().fg(Color::White))
@@ -76,8 +111,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .y_axis(Axis::default()
                 .title(Span::styled("Y Axis", Style::default().fg(Color::Red)))
                 .style(Style::default().fg(Color::White))
-                .bounds([40000.0, 50000.0])
-                .labels(["40000", "42500", "45000", "47500", "50000"].iter().cloned().map(Span::from).collect()));
+                .bounds([min, max])
+                .labels([format!("{:.2}", min), format!("{:.2}", max)].iter().cloned().map(Span::from).collect()));
 
         if let Ok(size) = terminal.size() {
             chunks = Layout::default()
@@ -90,13 +125,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         terminal.draw(|f| {
             f.render_widget(chart, chunks[1]);
+            f.render_widget(Paragraph::new(Text::from(format!("{:#?}", data))).block(Block::default().title("Debug").borders(Borders::ALL)), chunks[0])
         })?;
 
-        if let Ok(Event::Input(ev)) = events.next() {
+        if let Ok(f) = rx.try_recv() {
+            if data.len() > 10 {
+                data.remove(0);
+            }
+
+            data.push(OrderedFloat::from(f));
+        }
+
+        if let Ok(ev) = events.next() {
             match ev {
-                Key::Char(c) => {
-                    match c {
-                        'q' => break,
+                Event::Input(i) => {
+                    match i {
+                        Key::Char(c) => {
+                            match c {
+                                'q' => break,
+                                _ => ()
+                            }
+                        }
                         _ => ()
                     }
                 }

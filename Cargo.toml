@@ -7,5 +7,8 @@ edition = "2018"
 
 [dependencies]
 crossterm = "0.20.0"
-tokio = { version = "1.9.0", features = ["full"] }
+futures = "0.3.16"
+ordered-float = "2.7.0"
+tokio = { version = "0.2.0", features = ["full"] }
 tui = { version = "0.16.0", features = ["crossterm"], default-features = false }
+yahoo-finance = "0.3.0"
