@@ -4,8 +4,6 @@ use yahoo_finance::{history, Interval, Streamer, Timestamped};
 
 use ordered_float::OrderedFloat;
 
-const TICKER: &str = "NTDOY";
-
 use tui::{
     backend::CrosstermBackend,
     layout::{
@@ -16,22 +14,22 @@ use tui::{
     symbols,
     style::{
         Style,
+        Modifier,
         Color
     },
-    text::{Text, Span},
+    text::Span,
     widgets::{
         Axis,
         Borders,
         Block,
+        List,
+        ListItem,
         Chart,
         Dataset,
         GraphType,
-        Paragraph
     },
     Terminal,
 };
-
-use futures::{future, StreamExt};
 
 use crossterm::{
     ExecutableCommand,
@@ -42,6 +40,22 @@ use crossterm::{
         LeaveAlternateScreen
     }
 };
+
+use std::cmp::Ordering;
+
+/*struct Ticker<'a> {
+    data: Vec<OrderedFloat<f64>>,
+    ticker: &'a str,
+}
+
+impl<'a> Ticker<'a> {
+    pub fn new(ticker: &'a str) -> Self {
+        Self {
+            ticker,
+            data: vec![],
+        }
+    }
+}*/
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -58,15 +72,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let ticker = args.next().unwrap_or("NTDOY".into()).to_uppercase();
 
     terminal.clear()?;
-    let size = terminal.size()?;
+    let mut size = terminal.size()?;
 
     let events = Events::new(1000);
 
-    let _streamer = Streamer::new(vec![&ticker]);
+
+    let _streamer = Streamer::new(vec![&ticker.clone()]);
     //let (mut tx, rx) = mpsc::channel();
 
     /*tokio::spawn(async move {
-        streamer.stream().await
+        streame.stream().await
         .for_each(move |quote| {
             //tx.send(format!("At {}, {} is trading for ${}", quote.timestamp, quote.symbol, quote.price)).unwrap();
             tx.send(quote.price).unwrap();
@@ -79,13 +94,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut chunks = Layout::default()
         .direction(Direction::Horizontal)
         .constraints(vec![
-            Constraint::Percentage(20),
-            Constraint::Percentage(80)
+            Constraint::Percentage(100)
         ]).split(size);
 
     let mut data: Vec<OrderedFloat<f64>> = vec![];
 
-    let hist = history::retrieve_interval(&ticker, Interval::_max).await.unwrap();
+    let p = &OrderedFloat::from(0.0);
+
+    let tickers = vec![ticker.clone()];
+
+    let hist = history::retrieve_interval(&ticker, Interval::_1y).await.unwrap();
 
     let len = hist.len();
 
@@ -96,12 +114,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         y.push(format!("{}", d.datetime().format("%b %e %Y")));
     }
 
+    let mut render_list = true;
+    let mut is_first_render = true;
+    let mut current_index: usize = 0;
+
     loop {
         let floats: Vec<(f64, f64)> = data.iter().enumerate()
             .map(|(idx, &elem)| (idx as f64 + 1.0, f64::from(elem)))
             .collect();
-
-        let p = &OrderedFloat::from(0.0);
 
         let min = f64::from(data.iter().min().unwrap_or(&p).clone());
         let max = f64::from(data.iter().max().unwrap_or(&p).clone());
@@ -112,39 +132,99 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         let datasets = vec![
             Dataset::default()
-            .name(&ticker)
+                .name(&ticker)
                 .marker(symbols::Marker::Dot)
                 .graph_type(GraphType::Line)
-                .style(Style::default().fg(Color::Yellow))
+                .style(Style::default().fg(Color::Green))
                 .data(&floats),
         ];
 
-        let chart = Chart::new(datasets)
-            .block(Block::default().title("Tuinance").borders(Borders::ALL))
-            .x_axis(Axis::default()
-                .title(Span::styled("Date", Style::default().fg(Color::Blue)))
-                .style(Style::default().fg(Color::Magenta))
-                .bounds([0.0, len as f64])
-                .labels([f_date, m_date, l_date].iter().cloned().map(|x| Span::styled(x, Style::default().fg(Color::Blue))).collect()))
-            .y_axis(Axis::default()
-                .title(Span::styled("Price", Style::default().fg(Color::Blue)))
-                .style(Style::default().fg(Color::Magenta))
-                .bounds([min, max])
-                .labels([format!("{:.2}", min), format!("{:.2}", max)].iter().cloned().map(Span::from).collect()));
+        let t: Vec<ListItem> = tickers.iter().enumerate().map(|(idx, elem)| {
+            let style = match idx.cmp(&current_index) {
+                Ordering::Equal => Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD),
+                _ => Style::default()
+            };
 
-        if let Ok(size) = terminal.size() {
-            chunks = Layout::default()
-                .direction(Direction::Horizontal)
-                .constraints(vec![
-                    Constraint::Percentage(15),
-                    Constraint::Percentage(85)
-                ]).split(size);
+            let span = Span::styled(format!("{}: {}", elem.clone(), data.last().unwrap_or(p)), style);
+
+            ListItem::new(span)
+        }).collect();
+
+        let list = List::new(t)
+            .block(Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::Rgb(53, 59, 69)))
+            );
+
+        let chart = Chart::new(datasets)
+            .block(Block::default()
+                   .title(Span::styled(
+                        "TUInance",
+                        Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD))
+                    )
+                   .borders(Borders::ALL)
+                   .border_style(Style::default().fg(Color::Rgb(53, 59, 69)))
+            )
+            .style(Style::default().fg(Color::White))
+            .x_axis(Axis::default()
+                .title(Span::styled(
+                    "Date",
+                    Style::default().fg(Color::Yellow)
+                ))
+                .style(Style::default().fg(Color::Rgb(53, 59, 69)))
+                .bounds([0.0, len as f64])
+                .labels([f_date, m_date, l_date]
+                    .iter()
+                    .cloned()
+                    .map(|x| Span::styled(x, Style::default().fg(Color::Yellow)))
+                    .collect()
+                )
+            )
+
+            .y_axis(Axis::default()
+                .title(Span::styled("Price", Style::default().fg(Color::Yellow)))
+                .style(Style::default().fg(Color::Rgb(53, 59, 69)))
+                .bounds([min, max])
+                .labels([format!("{:.2}", min), format!("{:.2}", max)]
+                    .iter()
+                    .cloned()
+                    .map(|x| Span::styled(x, Style::default().fg(Color::Yellow)))
+                    .collect()
+                )
+            );
+
+
+        if let Ok(s) = terminal.size() {
+            if is_first_render || size != s {
+                let constraints = match render_list {
+                    true => vec![Constraint::Percentage(15), Constraint::Percentage(85)],
+                    false => vec![Constraint::Percentage(100)]
+                };
+                chunks = Layout::default()
+                    .direction(Direction::Horizontal)
+                    .constraints(constraints)
+                    .split(s);
+
+                is_first_render = false;
+                size = s;
+            }
         }
 
         terminal.draw(|f| {
-            f.render_widget(chart, chunks[1]);
-            f.render_widget(Paragraph::new(Text::from(format!("{:#?}", data))).block(Block::default().title("Debug").borders(Borders::ALL)), chunks[0])
+            match render_list {
+                true => {
+                    f.render_widget(chart, chunks[1]);
+                    f.render_widget(list, chunks[0]);
+                }
+                false => {
+                    f.render_widget(chart, chunks[0]);
+                }
+            }
+            //f.render_widget(Paragraph::new(Text::from(format!("{:#?}", data))).block(Block::default().title("Debug").borders(Borders::ALL)), chunks[0])
         })?;
+
 
         /*if let Ok(f) = rx.try_recv() {
             if data.len() > 10 {
@@ -161,6 +241,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         Key::Char(c) => {
                             match c {
                                 'q' => break,
+                                'l' => {
+                                    render_list = !render_list;
+                                    let constraints = match render_list {
+                                        true => vec![Constraint::Percentage(15), Constraint::Percentage(85)],
+                                        false => vec![Constraint::Percentage(100)]
+                                    };
+                                    chunks = Layout::default()
+                                        .direction(Direction::Horizontal)
+                                        .constraints(constraints)
+                                        .split(size);
+                                }
                                 _ => ()
                             }
                         }
