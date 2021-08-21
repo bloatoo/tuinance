@@ -1,6 +1,8 @@
 use tuinance::event::*;
 
 use yahoo_finance::{history, Interval, Streamer, Timestamped};
+use futures::future;
+use std::sync::mpsc;
 
 use ordered_float::OrderedFloat;
 
@@ -48,6 +50,7 @@ struct Ticker<'a> {
     data: Vec<(OrderedFloat<f64>, String)>,
     interval: Interval,
     identifier: &'a str,
+    realtime_price: f64,
 }
 
 impl<'a> Ticker<'a> {
@@ -55,6 +58,7 @@ impl<'a> Ticker<'a> {
         Self {
             identifier,
             interval: Interval::_6mo,
+            realtime_price: 0.0,
             //data,
             data: vec![],
         }
@@ -66,6 +70,15 @@ impl<'a> Ticker<'a> {
 
     pub fn interval(&self) -> &Interval {
         &self.interval
+    }
+
+    pub fn set_realtime_price(&mut self, val: f64) {
+        self.realtime_price = val;
+    }
+
+    pub fn realtime_price(&self) -> f64 {
+        let placeholder = &OrderedFloat::from(0.0);
+        f64::from(self.price_data().iter().last().unwrap_or(placeholder).clone())
     }
 
     pub fn set_interval(&mut self, interval: Interval) {
@@ -85,7 +98,6 @@ impl<'a> Ticker<'a> {
         self.data = data;
         
     }
-
 
     pub fn data(&self) -> &Vec<(OrderedFloat<f64>, String)> {
         &self.data
@@ -124,8 +136,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     args.next();
 
     //let ticker = args.next().unwrap_or("NTDOY".into()).to_uppercase();
-    let tickers = vec!["MSFT", "AAPL"];
-    let mut tickers: Vec<Ticker> = tickers.iter().map(|t| Ticker::new(t)).collect();
+    let tickers_str = vec!["MSFT", "AAPL"];
+    let mut tickers: Vec<Ticker> = tickers_str.iter().map(|t| Ticker::new(t)).collect();
 
     for t in tickers.iter_mut() {
         t.get_data().await;
@@ -136,18 +148,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let events = Events::new(1000);
 
-    //let _streamer = Streamer::new(vec![&ticker.clone()]);
-    //let (mut tx, rx) = mpsc::channel();
+    let streamer = Streamer::new(tickers_str);
+    let (tx, rx) = mpsc::channel();
 
-    /*tokio::spawn(async move {
-        streame.stream().await
+    tokio::spawn(async move {
+        streamer.stream().await
         .for_each(move |quote| {
-            //tx.send(format!("At {}, {} is trading for ${}", quote.timestamp, quote.symbol, quote.price)).unwrap();
-            tx.send(quote.price).unwrap();
+            tx.send((quote.price, quote.symbol)).unwrap();
+            //tx.send(quote.price).unwrap();
             future::ready(())
         })
         .await;
-    });*/
+    });
 
 
     let mut chunks = Layout::default()
@@ -204,7 +216,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 _ => Style::default()
             };
 
-            let span = Span::styled(format!("{}: {:.3}", elem.identifier(), elem.price_data().clone().last().unwrap_or(p)), style);
+            let span = Span::styled(format!("{}: {:.3}", elem.identifier(), elem.realtime_price()), style);
 
             ListItem::new(span)
         }).collect();
@@ -285,13 +297,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         })?;
 
 
-        /*if let Ok(f) = rx.try_recv() {
-            if data.len() > 10 {
-                data.remove(0);
-            }
-
-            data.push(OrderedFloat::from(f));
-        }*/
+        if let Ok(f) = rx.try_recv() {
+            let a = tickers.iter_mut().find(|t| t.identifier() == &f.1).unwrap();
+            a.set_realtime_price(f.0);
+        }
 
         if let Ok(ev) = events.next() {
             match ev {
