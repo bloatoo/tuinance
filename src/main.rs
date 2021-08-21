@@ -42,8 +42,9 @@ use crossterm::{
 };
 
 use std::cmp::Ordering;
+use futures::StreamExt;
 
-/*struct Ticker<'a> {
+struct Ticker<'a> {
     data: Vec<OrderedFloat<f64>>,
     ticker: &'a str,
 }
@@ -55,7 +56,22 @@ impl<'a> Ticker<'a> {
             data: vec![],
         }
     }
-}*/
+}
+
+fn next_interval(curr: Interval) -> Interval {
+    use Interval::*;
+    match curr {
+        _1mo => _3mo,
+        _3mo => _6mo,
+        _6mo => _1y,
+        _1y => _2y,
+        _2y => _5y,
+        _5y => _10y,
+        _10y => _max,
+        _max => _1mo,
+        _ => _1mo
+    }
+}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -101,11 +117,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let p = &OrderedFloat::from(0.0);
 
+    let mut interval = Interval::_6mo;
+
     let tickers = vec![ticker.clone()];
 
-    let hist = history::retrieve_interval(&ticker, Interval::_1y).await.unwrap();
+    let hist = history::retrieve_interval(&ticker, interval).await.unwrap();
 
-    let len = hist.len();
 
     let mut y = vec![];
 
@@ -119,6 +136,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut current_index: usize = 0;
 
     loop {
+        let len = data.len();
         let floats: Vec<(f64, f64)> = data.iter().enumerate()
             .map(|(idx, &elem)| (idx as f64 + 1.0, f64::from(elem)))
             .collect();
@@ -133,7 +151,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let datasets = vec![
             Dataset::default()
                 .name(&ticker)
-                .marker(symbols::Marker::Dot)
+                .marker(symbols::Marker::Braille)
                 .graph_type(GraphType::Line)
                 .style(Style::default().fg(Color::Green))
                 .data(&floats),
@@ -159,7 +177,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let chart = Chart::new(datasets)
             .block(Block::default()
                    .title(Span::styled(
-                        "TUInance",
+                        format!("TUInance - {} ({})", ticker, interval.to_string()),
                         Style::default()
                         .fg(Color::Yellow)
                         .add_modifier(Modifier::BOLD))
@@ -241,7 +259,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         Key::Char(c) => {
                             match c {
                                 'q' => break,
-                                'l' => {
+                                'z' => {
                                     render_list = !render_list;
                                     let constraints = match render_list {
                                         true => vec![Constraint::Percentage(15), Constraint::Percentage(85)],
@@ -251,6 +269,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                         .direction(Direction::Horizontal)
                                         .constraints(constraints)
                                         .split(size);
+                                }
+                                'l' => {
+                                    let int = next_interval(interval);
+                                    interval = int;
+
+                                    data.clear();
+                                    y.clear();
+
+                                    let hist = history::retrieve_interval(&ticker, interval).await.unwrap();
+                                    for d in hist.iter() {
+                                        data.push(OrderedFloat::from(d.high));
+                                        y.push(format!("{}", d.datetime().format("%b %e %Y")));
+                                    }
                                 }
                                 _ => ()
                             }
