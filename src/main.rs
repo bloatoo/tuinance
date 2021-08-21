@@ -1,6 +1,9 @@
-use tuinance::event::*;
+use tuinance::{
+    config::Config,
+    event::*
+};
 
-use yahoo_finance::{history, Interval, Streamer, Timestamped};
+use yahoo_finance::{history, Interval, Streamer, Timestamped, Profile};
 use futures::future;
 use std::sync::mpsc;
 
@@ -46,8 +49,9 @@ use crossterm::{
 use std::cmp::Ordering;
 use futures::StreamExt;
 
-struct Ticker<'a> {
+pub struct Ticker<'a> {
     data: Vec<(OrderedFloat<f64>, String)>,
+    name: String,
     interval: Interval,
     identifier: &'a str,
     realtime_price: f64,
@@ -59,7 +63,7 @@ impl<'a> Ticker<'a> {
             identifier,
             interval: Interval::_6mo,
             realtime_price: 0.0,
-            //data,
+            name: String::new(),
             data: vec![],
         }
     }
@@ -76,6 +80,10 @@ impl<'a> Ticker<'a> {
         self.realtime_price = val;
     }
 
+    pub fn name(&self) -> &String {
+        &self.name
+    }
+
     pub fn realtime_price(&self) -> f64 {
         let placeholder = &OrderedFloat::from(0.0);
         f64::from(self.price_data().iter().last().unwrap_or(placeholder).clone())
@@ -83,6 +91,19 @@ impl<'a> Ticker<'a> {
 
     pub fn set_interval(&mut self, interval: Interval) {
         self.interval = interval;
+    }
+
+    pub async fn get_profile(&mut self) {
+        let profile = Profile::load(&self.identifier).await.unwrap();
+
+        self.name = match profile {
+            Profile::Company(c) => {
+                c.name
+            }
+            Profile::Fund(f) => {
+                f.name
+            }
+        };
     }
     
     pub async fn get_data(&mut self) {
@@ -96,7 +117,6 @@ impl<'a> Ticker<'a> {
         }
 
         self.data = data;
-        
     }
 
     pub fn data(&self) -> &Vec<(OrderedFloat<f64>, String)> {
@@ -139,12 +159,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut args = std::env::args();
     args.next();
 
+    let user = std::env::var("USER").unwrap();
+
+    let conf = match Config::read(&format!("/home/{}/.config/tuinance.toml", user)) {
+        Ok(val) => val,
+        Err(_) => Config::default()
+    };
     //let ticker = args.next().unwrap_or("NTDOY".into()).to_uppercase();
-    let tickers_str = vec!["MSFT", "AAPL"];
+    let tickers_str = conf.tickers();
     let mut tickers: Vec<Ticker> = tickers_str.iter().map(|t| Ticker::new(t)).collect();
 
     for t in tickers.iter_mut() {
         t.get_data().await;
+        t.get_profile().await;
     }
 
     terminal.clear()?;
@@ -210,7 +237,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 _ => Style::default()
             };
 
-            let span = Span::styled(format!("{}: {:.3}", elem.identifier(), elem.realtime_price()), style);
+            let span = Span::styled(format!("{}: {:.3}", elem.name(), elem.realtime_price()), style);
 
             ListItem::new(span)
         }).collect();

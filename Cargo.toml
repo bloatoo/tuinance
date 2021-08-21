@@ -9,6 +9,8 @@ edition = "2018"
 crossterm = "0.20.0"
 futures = "0.3.16"
 ordered-float = "2.7.0"
+serde = "1.0.127"
 tokio = { version = "0.2.0", features = ["full"] }
+toml = "0.5.8"
 tui = { version = "0.16.0", features = ["crossterm"], default-features = false }
 yahoo-finance = "0.3.0"
