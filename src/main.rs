@@ -106,6 +106,10 @@ impl<'a> Ticker<'a> {
     pub fn price_data(&self) -> Vec<OrderedFloat<f64>> {
         self.data.iter().map(|elem| elem.0).collect()
     }
+
+    pub fn date_data(&self) -> Vec<String> {
+        self.data.iter().map(|elem| elem.1.clone()).collect()
+    }
 }
 
 fn next_interval(curr: Interval) -> Interval {
@@ -174,8 +178,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     //let hist = history::retrieve_interval(&ticker, interval).await.unwrap();
 
-    let mut y = vec![];
-
     /*for d in hist.iter() {
         data.push(OrderedFloat::from(d.high));
         y.push(format!("{}", d.datetime().format("%b %e %Y")));
@@ -188,6 +190,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     loop {
         let ticker = tickers.get(current_index).unwrap();
         let data = ticker.price_data();
+        let y = ticker.date_data();
 
         let len = data.len();
         let floats: Vec<(f64, f64)> = data.iter().enumerate()
