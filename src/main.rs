@@ -1,7 +1,8 @@
 use tuinance::{
     config::Config,
     ticker::Ticker,
-    event::*
+    event::*,
+    utils::*
 };
 
 use yahoo_finance::{Interval, Streamer};
@@ -50,21 +51,6 @@ use crossterm::{
 use std::cmp::Ordering;
 use futures::StreamExt;
 
-fn next_interval(curr: Interval) -> Interval {
-    use Interval::*;
-    match curr {
-        _1mo => _3mo,
-        _3mo => _6mo,
-        _6mo => _1y,
-        _1y => _2y,
-        _2y => _5y,
-        _5y => _10y,
-        _10y => _max,
-        _max => _1mo,
-        _ => _1mo
-    }
-}
-
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     enable_raw_mode()?;
@@ -88,8 +74,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut tickers: Vec<Ticker> = tickers_str.iter().map(|t| Ticker::new(t)).collect();
 
     for t in tickers.iter_mut() {
-        t.get_data().await;
-        t.get_profile().await;
+        t.init().await;
     }
 
     terminal.clear()?;
@@ -109,7 +94,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         })
         .await;
     });
-
 
     let mut chunks = Layout::default()
         .direction(Direction::Horizontal)
@@ -155,7 +139,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 _ => Style::default()
             };
 
-            let span = Span::styled(format!("{}: {:.3}", elem.name(), elem.realtime_price()), style);
+            let span = Span::styled(format!("{}: {:.3} ({})", elem.name(), elem.realtime_price(), elem.max_data().len()), style);
 
             ListItem::new(span)
         }).collect();
@@ -263,7 +247,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 'l' => {
                                     let ticker = tickers.get_mut(current_index).unwrap();
                                     ticker.set_interval(next_interval(*ticker.interval()));
-                                    ticker.get_data().await;
                                 }
                                 _ => ()
                             }

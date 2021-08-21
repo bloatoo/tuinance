@@ -1,8 +1,10 @@
 use ordered_float::OrderedFloat;
 use yahoo_finance::{Profile, history, Interval, Timestamped};
+use crate::utils::interval_to_days;
 
 pub struct Ticker<'a> {
     data: Vec<(OrderedFloat<f64>, String)>,
+    max_data: Vec<(OrderedFloat<f64>, String)>,
     name: String,
     interval: Interval,
     identifier: &'a str,
@@ -17,6 +19,7 @@ impl<'a> Ticker<'a> {
             realtime_price: 0.0,
             name: String::new(),
             data: vec![],
+            max_data: vec![],
         }
     }
 
@@ -26,6 +29,10 @@ impl<'a> Ticker<'a> {
 
     pub fn interval(&self) -> &Interval {
         &self.interval
+    }
+
+    pub fn max_data(&self) -> &Vec<(OrderedFloat<f64>, String)> {
+        &self.max_data
     }
 
     pub fn set_realtime_price(&mut self, val: f64) {
@@ -43,9 +50,19 @@ impl<'a> Ticker<'a> {
 
     pub fn set_interval(&mut self, interval: Interval) {
         self.interval = interval;
+
+        let days = interval_to_days(interval) as usize;
+        let max_len = self.max_data.len();
+
+        if days > max_len || days == 0 {
+            self.data = self.max_data.clone();
+            return;
+        }
+
+        self.data = self.max_data[max_len - days..max_len].to_vec();
     }
 
-    pub async fn get_profile(&mut self) {
+    pub async fn init(&mut self) {
         let profile = Profile::load(&self.identifier).await.unwrap();
 
         self.name = match profile {
@@ -56,10 +73,8 @@ impl<'a> Ticker<'a> {
                 f.name
             }
         };
-    }
-    
-    pub async fn get_data(&mut self) {
-        let hist = history::retrieve_interval(&self.identifier, self.interval).await.unwrap();
+
+        let hist = history::retrieve_interval(&self.identifier, Interval::_10y).await.unwrap();
 
         let mut data = vec![];
 
@@ -68,7 +83,18 @@ impl<'a> Ticker<'a> {
             data.push((OrderedFloat::from(d.high), date));
         }
 
-        self.data = data;
+        self.max_data = data;
+
+        let days = interval_to_days(self.interval) as usize;
+
+        let max_len = self.max_data.len();
+
+        if days > max_len || days == 0 {
+            self.data = self.max_data.clone();
+            return;
+        }
+
+        self.data = self.max_data[max_len - days..max_len].to_vec();
     }
 
     pub fn data(&self) -> &Vec<(OrderedFloat<f64>, String)> {
