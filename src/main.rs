@@ -45,16 +45,54 @@ use std::cmp::Ordering;
 use futures::StreamExt;
 
 struct Ticker<'a> {
-    data: Vec<OrderedFloat<f64>>,
-    ticker: &'a str,
+    data: Vec<(OrderedFloat<f64>, String)>,
+    interval: Interval,
+    identifier: &'a str,
 }
 
 impl<'a> Ticker<'a> {
-    pub fn new(ticker: &'a str) -> Self {
+    pub fn new(identifier: &'a str) -> Ticker<'a> {
         Self {
-            ticker,
+            identifier,
+            interval: Interval::_6mo,
+            //data,
             data: vec![],
         }
+    }
+
+    pub fn identifier(&self) -> &'a str {
+        &self.identifier
+    }
+
+    pub fn interval(&self) -> &Interval {
+        &self.interval
+    }
+
+    pub fn set_interval(&mut self, interval: Interval) {
+        self.interval = interval;
+    }
+    
+    pub async fn get_data(&mut self) {
+        let hist = history::retrieve_interval(&self.identifier, self.interval).await.unwrap();
+
+        let mut data = vec![];
+
+        for d in hist.iter() {
+            let date = format!("{}", d.datetime().format("%b %e %Y"));
+            data.push((OrderedFloat::from(d.high), date));
+        }
+
+        self.data = data;
+        
+    }
+
+
+    pub fn data(&self) -> &Vec<(OrderedFloat<f64>, String)> {
+        &self.data
+    }
+
+    pub fn price_data(&self) -> Vec<OrderedFloat<f64>> {
+        self.data.iter().map(|elem| elem.0).collect()
     }
 }
 
@@ -85,15 +123,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut args = std::env::args();
     args.next();
 
-    let ticker = args.next().unwrap_or("NTDOY".into()).to_uppercase();
+    //let ticker = args.next().unwrap_or("NTDOY".into()).to_uppercase();
+    let tickers = vec!["MSFT", "AAPL"];
+    let mut tickers: Vec<Ticker> = tickers.iter().map(|t| Ticker::new(t)).collect();
+
+    for t in tickers.iter_mut() {
+        t.get_data().await;
+    }
 
     terminal.clear()?;
     let mut size = terminal.size()?;
 
     let events = Events::new(1000);
 
-
-    let _streamer = Streamer::new(vec![&ticker.clone()]);
+    //let _streamer = Streamer::new(vec![&ticker.clone()]);
     //let (mut tx, rx) = mpsc::channel();
 
     /*tokio::spawn(async move {
@@ -113,29 +156,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             Constraint::Percentage(100)
         ]).split(size);
 
-    let mut data: Vec<OrderedFloat<f64>> = vec![];
+    //let mut data: Vec<OrderedFloat<f64>> = vec![];
 
     let p = &OrderedFloat::from(0.0);
 
-    let mut interval = Interval::_6mo;
-
-    let tickers = vec![ticker.clone()];
-
-    let hist = history::retrieve_interval(&ticker, interval).await.unwrap();
-
+    //let hist = history::retrieve_interval(&ticker, interval).await.unwrap();
 
     let mut y = vec![];
 
-    for d in hist.iter() {
+    /*for d in hist.iter() {
         data.push(OrderedFloat::from(d.high));
         y.push(format!("{}", d.datetime().format("%b %e %Y")));
-    }
+    }*/
 
     let mut render_list = true;
     let mut is_first_render = true;
     let mut current_index: usize = 0;
 
     loop {
+        let ticker = tickers.get(current_index).unwrap();
+        let data = ticker.price_data();
+
         let len = data.len();
         let floats: Vec<(f64, f64)> = data.iter().enumerate()
             .map(|(idx, &elem)| (idx as f64 + 1.0, f64::from(elem)))
@@ -150,7 +191,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         let datasets = vec![
             Dataset::default()
-                .name(&ticker)
+                .name(ticker.identifier())
                 .marker(symbols::Marker::Braille)
                 .graph_type(GraphType::Line)
                 .style(Style::default().fg(Color::Green))
@@ -163,7 +204,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 _ => Style::default()
             };
 
-            let span = Span::styled(format!("{}: {}", elem.clone(), data.last().unwrap_or(p)), style);
+            let span = Span::styled(format!("{}: {:.3}", elem.identifier(), elem.price_data().clone().last().unwrap_or(p)), style);
 
             ListItem::new(span)
         }).collect();
@@ -177,7 +218,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let chart = Chart::new(datasets)
             .block(Block::default()
                    .title(Span::styled(
-                        format!("TUInance - {} ({})", ticker, interval.to_string()),
+                        format!("TUInance - {} ({})", ticker.identifier(), ticker.interval().to_string()),
                         Style::default()
                         .fg(Color::Yellow)
                         .add_modifier(Modifier::BOLD))
@@ -270,18 +311,23 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                         .constraints(constraints)
                                         .split(size);
                                 }
+                                'j' => current_index += 1,
+                                'k' => current_index -= 1,
                                 'l' => {
-                                    let int = next_interval(interval);
+                                    let ticker = tickers.get_mut(current_index).unwrap();
+                                    ticker.set_interval(next_interval(ticker.interval));
+                                    ticker.get_data().await;
+                                    /*let int = next_interval(ticker.in);
                                     interval = int;
 
                                     data.clear();
                                     y.clear();
 
-                                    let hist = history::retrieve_interval(&ticker, interval).await.unwrap();
+                                    let hist = history::retrieve_interval(&ticker.identifier(), interval).await.unwrap();
                                     for d in hist.iter() {
                                         data.push(OrderedFloat::from(d.high));
                                         y.push(format!("{}", d.datetime().format("%b %e %Y")));
-                                    }
+                                    }*/
                                 }
                                 _ => ()
                             }
