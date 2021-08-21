@@ -172,16 +172,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             Constraint::Percentage(100)
         ]).split(size);
 
-    //let mut data: Vec<OrderedFloat<f64>> = vec![];
-
     let p = &OrderedFloat::from(0.0);
-
-    //let hist = history::retrieve_interval(&ticker, interval).await.unwrap();
-
-    /*for d in hist.iter() {
-        data.push(OrderedFloat::from(d.high));
-        y.push(format!("{}", d.datetime().format("%b %e %Y")));
-    }*/
 
     let mut render_list = true;
     let mut is_first_render = true;
@@ -296,7 +287,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     f.render_widget(chart, chunks[0]);
                 }
             }
-            //f.render_widget(Paragraph::new(Text::from(format!("{:#?}", data))).block(Block::default().title("Debug").borders(Borders::ALL)), chunks[0])
         })?;
 
 
@@ -329,17 +319,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     let ticker = tickers.get_mut(current_index).unwrap();
                                     ticker.set_interval(next_interval(ticker.interval));
                                     ticker.get_data().await;
-                                    /*let int = next_interval(ticker.in);
-                                    interval = int;
-
-                                    data.clear();
-                                    y.clear();
-
-                                    let hist = history::retrieve_interval(&ticker.identifier(), interval).await.unwrap();
-                                    for d in hist.iter() {
-                                        data.push(OrderedFloat::from(d.high));
-                                        y.push(format!("{}", d.datetime().format("%b %e %Y")));
-                                    }*/
                                 }
                                 _ => ()
                             }
