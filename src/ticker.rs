@@ -30,17 +30,17 @@ impl Info {
     }
 }
 
-pub struct Ticker<'a> {
+pub struct Ticker {
     data: Vec<(OrderedFloat<f64>, String)>,
     max_data: Vec<(OrderedFloat<f64>, String)>,
     info: Info,
     interval: Interval,
-    identifier: &'a str,
+    identifier: String,
     realtime_price: f64,
 }
 
-impl<'a> Ticker<'a> {
-    pub fn new(identifier: &'a str) -> Ticker<'a> {
+impl Ticker {
+    pub fn new(identifier: String) -> Ticker {
         Self {
             identifier,
             interval: Interval::_6mo,
@@ -51,7 +51,7 @@ impl<'a> Ticker<'a> {
         }
     }
 
-    pub fn identifier(&self) -> &'a str {
+    pub fn identifier(&self) -> &String {
         &self.identifier
     }
 
@@ -76,9 +76,8 @@ impl<'a> Ticker<'a> {
         f64::from(self.price_data().iter().last().unwrap_or(placeholder).clone())
     }
 
-    pub async fn set_interval(&mut self, interval: Interval) -> Result<(), yahoo_finance::Error> {
+    pub async fn set_interval(&mut self, interval: Interval) {
         self.interval = interval;
-        self.get_data().await
     }
 
     pub async fn get_profile(&mut self) {
@@ -86,12 +85,17 @@ impl<'a> Ticker<'a> {
         self.info = Info::from(profile);
     }
 
-    pub async fn init(&mut self) -> Result<(), yahoo_finance::Error> {
-        self.get_data().await?;
-        self.get_profile().await;
-
+    pub fn init_data(&mut self, data: Vec<(OrderedFloat<f64>, String)>) {
+        self.data = data;
         self.realtime_price = f64::from(*self.data.last().unwrap().0);
-        Ok(())
+    }
+
+    pub fn update_data(&mut self, data: Vec<(OrderedFloat<f64>, String)>) {
+        self.data = data;
+    }
+    
+    pub fn init_info(&mut self, profile: Profile) {
+        self.info = Info::from(profile);
     }
 
     pub async fn get_data(&mut self) -> Result<(), yahoo_finance::Error> {

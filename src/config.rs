@@ -14,7 +14,7 @@ impl Config {
     }
 
     pub fn tickers(&self) -> Vec<&str> {
-        self.tickers.iter().map(|elem| elem.as_str()).collect()
+        self.tickers.iter().map(|elem| elem.as_str()).collect::<Vec<&str>>().clone()
     }
     
     pub fn read(path: &str) -> Result<Self, Box<dyn std::error::Error>> {

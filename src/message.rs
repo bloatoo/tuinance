@@ -1,12 +1,9 @@
 use ordered_float::OrderedFloat;
-
-pub struct TickerData {
-    symbol: String,
-    data: Vec<(OrderedFloat<f64>, String)>,
-}
+use yahoo_finance::Profile;
 
 pub enum Message {
-    Init(TickerData),
-    PriceUpdate((f64, String)),
-    IntervalData((Vec<(OrderedFloat<f64>, String)>, String)),
+    DataInit((String, Vec<(OrderedFloat<f64>, String)>)),
+    ProfileInit((String, Profile)),
+    PriceUpdate((String, f64)),
+    IntervalData((String, Vec<(OrderedFloat<f64>, String)>)),
 }
