@@ -72,8 +72,12 @@ impl Ticker {
     }
 
     pub fn realtime_price(&self) -> f64 {
-        let placeholder = &OrderedFloat::from(0.0);
-        f64::from(self.price_data().iter().last().unwrap_or(placeholder).clone())
+        if self.realtime_price == 0.0 {
+            let placeholder = &OrderedFloat::from(0.0);
+            f64::from(self.price_data().iter().last().unwrap_or(placeholder).clone())
+        } else {
+            self.realtime_price
+        }
     }
 
     pub async fn set_interval(&mut self, interval: Interval) {

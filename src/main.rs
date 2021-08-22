@@ -64,7 +64,7 @@ async fn get_interval_data(symbol: &str, interval: Interval, tx: Sender<Message>
     tx.send(Message::IntervalData((symbol.to_string(), data))).unwrap();
 }
 
-async fn init_data(symbol: &str, interval: Interval, tx: Sender<Message>) {
+/*async fn init_data(symbol: &str, interval: Interval, tx: Sender<Message>) {
     let hist = history::retrieve_interval(symbol, interval).await.unwrap_or(vec![]);
 
     let mut data = vec![];
@@ -74,7 +74,7 @@ async fn init_data(symbol: &str, interval: Interval, tx: Sender<Message>) {
         data.push((OrderedFloat::from(d.close), date));
     }
     tx.send(Message::DataInit((symbol.to_string(), data))).unwrap();
-}
+}*/
 
 
 async fn get_profile(symbol: &str, tx: Sender<Message>) {
