@@ -80,7 +80,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     terminal.clear()?;
     let mut size = terminal.size()?;
 
-    let events = Events::new(1000);
+    let events = Events::new(250);
 
     let streamer = Streamer::new(tickers_str);
     let (tx, rx) = mpsc::channel();
