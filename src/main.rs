@@ -63,7 +63,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut args = std::env::args();
     args.next();
 
-    let user = std::env::var("USER").unwrap();
+    let user = std::env::var("USER")?;
 
     let conf = match Config::read(&format!("/home/{}/.config/tuinance.toml", user)) {
         Ok(val) => val,
@@ -74,8 +74,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut tickers: Vec<Ticker> = tickers_str.iter().map(|t| Ticker::new(t)).collect();
 
     for t in tickers.iter_mut() {
-        t.get_profile().await;
-        t.get_data().await.unwrap();
+        t.init().await?;
     }
 
     terminal.clear()?;
@@ -141,7 +140,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 _ => Style::default()
             };
 
-            let span = Span::styled(format!("{}: {:.3} ({})", elem.name(), elem.realtime_price(), elem.max_data().len()), style);
+            let span = Span::styled(format!("{}: {:.3}", elem.name(), elem.realtime_price()), style);
 
             ListItem::new(span)
         }).collect();
@@ -195,7 +194,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         if let Ok(s) = terminal.size() {
             if is_first_render || size != s {
                 let constraints = match render_list {
-                    true => vec![Constraint::Percentage(15), Constraint::Percentage(85)],
+                    true => vec![Constraint::Percentage(20), Constraint::Percentage(80)],
                     false => vec![Constraint::Percentage(100)]
                 };
                 chunks = Layout::default()
@@ -222,7 +221,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 
         if let Ok(f) = rx.try_recv() {
-            panic!("based");
             let a = tickers.iter_mut().find(|t| t.identifier() == &f.1).unwrap();
             a.set_realtime_price(f.0);
         }
@@ -237,7 +235,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 'z' => {
                                     render_list = !render_list;
                                     let constraints = match render_list {
-                                        true => vec![Constraint::Percentage(15), Constraint::Percentage(85)],
+                                        true => vec![Constraint::Percentage(20), Constraint::Percentage(80)],
                                         false => vec![Constraint::Percentage(100)]
                                     };
                                     chunks = Layout::default()

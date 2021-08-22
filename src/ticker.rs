@@ -76,6 +76,13 @@ impl<'a> Ticker<'a> {
         };
     }
 
+    pub async fn init(&mut self) -> Result<(), yahoo_finance::Error> {
+        self.get_data().await.unwrap();
+        self.get_profile().await;
+
+        self.realtime_price = f64::from(*self.data.last().unwrap().0);
+        Ok(())
+    }
 
     pub async fn get_data(&mut self) -> Result<(), yahoo_finance::Error> {
         let hist = history::retrieve_interval(&self.identifier, self.interval).await?;
@@ -87,7 +94,7 @@ impl<'a> Ticker<'a> {
             data.push((OrderedFloat::from(d.close), date));
         }
 
-        self.data = data;
+        self.data = data.clone();
         Ok(())
 
         /*self.max_data = data;
