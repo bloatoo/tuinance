@@ -182,7 +182,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .title(Span::styled("Price", Style::default().fg(Color::Yellow)))
                 .style(Style::default().fg(Color::Rgb(53, 59, 69)))
                 .bounds([min, max])
-                .labels([format!("{:.2}", min), format!("{:.2}", max)]
+                .labels([format!("{:.3}", min), format!("{:.3}", min + (max - min) / 2.0), format!("{:.3}", max)]
                     .iter()
                     .cloned()
                     .map(|x| Span::styled(x, Style::default().fg(Color::Yellow)))

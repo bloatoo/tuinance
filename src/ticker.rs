@@ -77,7 +77,7 @@ impl<'a> Ticker<'a> {
     }
 
     pub async fn init(&mut self) -> Result<(), yahoo_finance::Error> {
-        self.get_data().await.unwrap();
+        self.get_data().await?;
         self.get_profile().await;
 
         self.realtime_price = f64::from(*self.data.last().unwrap().0);
