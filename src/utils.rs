@@ -3,7 +3,6 @@ use yahoo_finance::Interval;
 pub fn next_interval(curr: Interval) -> Interval {
     use Interval::*;
     match curr {
-        _1d => _5d,
         _5d => _1mo,
         _1mo => _3mo,
         _3mo => _6mo,
@@ -13,12 +12,12 @@ pub fn next_interval(curr: Interval) -> Interval {
         _5y => _10y,
         _10y => _max,
         _max => _ytd,
-        _ytd => _1m,
-        _ => _1d,
+        _ytd => _5d,
+        _ => _5d,
     }
 }
 
-pub fn interval_to_days(int: Interval) -> u32 {
+/*pub fn interval_to_days(int: Interval) -> u32 {
     use Interval::*;
     match int {
         _1mo => 30,
@@ -30,4 +29,4 @@ pub fn interval_to_days(int: Interval) -> u32 {
         _10y => 3650,
         _ => 0,
     }
-}
+}*/
