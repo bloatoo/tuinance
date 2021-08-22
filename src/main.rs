@@ -74,7 +74,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut tickers: Vec<Ticker> = tickers_str.iter().map(|t| Ticker::new(t)).collect();
 
     for t in tickers.iter_mut() {
-        t.init().await;
+        t.get_profile().await;
+        t.get_data().await.unwrap();
     }
 
     terminal.clear()?;
@@ -106,6 +107,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut render_list = true;
     let mut is_first_render = true;
     let mut current_index: usize = 0;
+    let mut current_error = String::new();
 
     loop {
         let ticker = tickers.get(current_index).unwrap();
@@ -153,7 +155,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let chart = Chart::new(datasets)
             .block(Block::default()
                    .title(Span::styled(
-                        format!("TUInance - {} ({})", ticker.identifier(), ticker.interval().to_string()),
+                        format!("TUInance - {} ({}) {}", ticker.identifier(), ticker.interval().to_string(), current_error),
                         Style::default()
                         .fg(Color::Yellow)
                         .add_modifier(Modifier::BOLD))
@@ -220,6 +222,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 
         if let Ok(f) = rx.try_recv() {
+            panic!("based");
             let a = tickers.iter_mut().find(|t| t.identifier() == &f.1).unwrap();
             a.set_realtime_price(f.0);
         }
@@ -246,7 +249,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 'k' => current_index -= 1,
                                 'l' => {
                                     let ticker = tickers.get_mut(current_index).unwrap();
-                                    ticker.set_interval(next_interval(*ticker.interval()));
+                                    let next = next_interval(*ticker.interval());
+                                    if let Err(e) = ticker.set_interval(next).await {
+                                        current_error = "| ".to_string() + &e.to_string();
+                                    }
                                 }
                                 _ => ()
                             }

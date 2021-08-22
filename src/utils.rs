@@ -3,6 +3,8 @@ use yahoo_finance::Interval;
 pub fn next_interval(curr: Interval) -> Interval {
     use Interval::*;
     match curr {
+        _1d => _5d,
+        _5d => _1mo,
         _1mo => _3mo,
         _3mo => _6mo,
         _6mo => _1y,
@@ -10,8 +12,9 @@ pub fn next_interval(curr: Interval) -> Interval {
         _2y => _5y,
         _5y => _10y,
         _10y => _max,
-        _max => _1mo,
-        _ => _1mo
+        _max => _ytd,
+        _ytd => _1m,
+        _ => _1d,
     }
 }
 

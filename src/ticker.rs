@@ -48,10 +48,11 @@ impl<'a> Ticker<'a> {
         f64::from(self.price_data().iter().last().unwrap_or(placeholder).clone())
     }
 
-    pub fn set_interval(&mut self, interval: Interval) {
+    pub async fn set_interval(&mut self, interval: Interval) -> Result<(), yahoo_finance::Error> {
         self.interval = interval;
+        self.get_data().await
 
-        let days = interval_to_days(interval) as usize;
+        /*let days = interval_to_days(interval) as usize;
         let max_len = self.max_data.len();
 
         if days > max_len || days == 0 {
@@ -59,10 +60,10 @@ impl<'a> Ticker<'a> {
             return;
         }
 
-        self.data = self.max_data[max_len - days..max_len].to_vec();
+        self.data = self.max_data[max_len - days..max_len].to_vec();*/
     }
 
-    pub async fn init(&mut self) {
+    pub async fn get_profile(&mut self) {
         let profile = Profile::load(&self.identifier).await.unwrap();
 
         self.name = match profile {
@@ -73,17 +74,23 @@ impl<'a> Ticker<'a> {
                 f.name
             }
         };
+    }
 
-        let hist = history::retrieve_interval(&self.identifier, Interval::_10y).await.unwrap();
+
+    pub async fn get_data(&mut self) -> Result<(), yahoo_finance::Error> {
+        let hist = history::retrieve_interval(&self.identifier, self.interval).await?;
 
         let mut data = vec![];
 
         for d in hist.iter() {
             let date = format!("{}", d.datetime().format("%b %e %Y"));
-            data.push((OrderedFloat::from(d.high), date));
+            data.push((OrderedFloat::from(d.close), date));
         }
 
-        self.max_data = data;
+        self.data = data;
+        Ok(())
+
+        /*self.max_data = data;
 
         let days = interval_to_days(self.interval) as usize;
 
@@ -94,7 +101,7 @@ impl<'a> Ticker<'a> {
             return;
         }
 
-        self.data = self.max_data[max_len - days..max_len].to_vec();
+        self.data = self.max_data[max_len - days..max_len].to_vec();*/
     }
 
     pub fn data(&self) -> &Vec<(OrderedFloat<f64>, String)> {
