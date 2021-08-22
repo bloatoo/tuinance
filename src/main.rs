@@ -1,7 +1,8 @@
 use tuinance::{
     config::Config,
-    ticker::Ticker,
     event::*,
+    message::*,
+    ticker::Ticker,
     utils::*
 };
 
@@ -69,7 +70,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Ok(val) => val,
         Err(_) => Config::default()
     };
-    //let ticker = args.next().unwrap_or("NTDOY".into()).to_uppercase();
+
     let tickers_str = conf.tickers();
     let mut tickers: Vec<Ticker> = tickers_str.iter().map(|t| Ticker::new(t)).collect();
 
@@ -83,13 +84,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let events = Events::new(250);
 
     let streamer = Streamer::new(tickers_str);
-    let (tx, rx) = mpsc::channel();
+    let (tx, rx) = mpsc::channel::<Message>();
 
     tokio::spawn(async move {
         streamer.stream().await
         .for_each(move |quote| {
-            tx.send((quote.price, quote.symbol)).unwrap();
-            //tx.send(quote.price).unwrap();
+            tx.send(Message::PriceUpdate((quote.price, quote.symbol))).unwrap();
             future::ready(())
         })
         .await;
@@ -220,9 +220,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         })?;
 
 
-        if let Ok(f) = rx.try_recv() {
-            let a = tickers.iter_mut().find(|t| t.identifier() == &f.1).unwrap();
-            a.set_realtime_price(f.0);
+        if let Ok(msg) = rx.try_recv() {
+            use Message::*;
+            match msg {
+                Init(_data) => {
+                    
+                }
+
+                IntervalData(_) => {}
+
+                PriceUpdate((price, symbol)) => {
+                    let ticker = tickers.iter_mut().find(|t| t.identifier() == &symbol).unwrap();
+                    ticker.set_realtime_price(price);
+                }
+            }
         }
 
         if let Ok(ev) = events.next() {
@@ -258,7 +269,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         _ => ()
                     }
                 }
-                _ => ()
+                Event::Tick => (),
             }
         }
     }

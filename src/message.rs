@@ -7,5 +7,6 @@ pub struct TickerData {
 
 pub enum Message {
     Init(TickerData),
+    PriceUpdate((f64, String)),
     IntervalData((Vec<(OrderedFloat<f64>, String)>, String)),
 }
