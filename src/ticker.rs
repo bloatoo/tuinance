@@ -1,11 +1,39 @@
 use ordered_float::OrderedFloat;
 use yahoo_finance::{Profile, history, Interval, Timestamped};
-use crate::utils::interval_to_days;
+
+pub struct Info {
+    name: String,
+}
+
+impl From<Profile> for Info {
+    fn from(p: Profile) -> Self {
+        let name = match p {
+            Profile::Company(p) => p.name,
+            Profile::Fund(p) => p.name,
+        };
+
+        Self {
+            name
+        }
+    }
+}
+
+impl Info {
+    pub fn unknown() -> Self {
+        Self {
+            name: String::new(),
+        }
+    }
+
+    pub fn name(&self) -> &String {
+        &self.name
+    }
+}
 
 pub struct Ticker<'a> {
     data: Vec<(OrderedFloat<f64>, String)>,
     max_data: Vec<(OrderedFloat<f64>, String)>,
-    name: String,
+    info: Info,
     interval: Interval,
     identifier: &'a str,
     realtime_price: f64,
@@ -17,7 +45,7 @@ impl<'a> Ticker<'a> {
             identifier,
             interval: Interval::_6mo,
             realtime_price: 0.0,
-            name: String::new(),
+            info: Info::unknown(),
             data: vec![],
             max_data: vec![],
         }
@@ -39,8 +67,8 @@ impl<'a> Ticker<'a> {
         self.realtime_price = val;
     }
 
-    pub fn name(&self) -> &String {
-        &self.name
+    pub fn info(&self) -> &Info {
+        &self.info
     }
 
     pub fn realtime_price(&self) -> f64 {
@@ -51,29 +79,11 @@ impl<'a> Ticker<'a> {
     pub async fn set_interval(&mut self, interval: Interval) -> Result<(), yahoo_finance::Error> {
         self.interval = interval;
         self.get_data().await
-
-        /*let days = interval_to_days(interval) as usize;
-        let max_len = self.max_data.len();
-
-        if days > max_len || days == 0 {
-            self.data = self.max_data.clone();
-            return;
-        }
-
-        self.data = self.max_data[max_len - days..max_len].to_vec();*/
     }
 
     pub async fn get_profile(&mut self) {
         let profile = Profile::load(&self.identifier).await.unwrap();
-
-        self.name = match profile {
-            Profile::Company(c) => {
-                c.name
-            }
-            Profile::Fund(f) => {
-                f.name
-            }
-        };
+        self.info = Info::from(profile);
     }
 
     pub async fn init(&mut self) -> Result<(), yahoo_finance::Error> {
