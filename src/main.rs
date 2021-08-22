@@ -140,7 +140,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 _ => Style::default()
             };
 
-            let span = Span::styled(format!("{}: {:.3}", elem.name(), elem.realtime_price()), style);
+            let span = Span::styled(format!("{}: {:.3}", elem.info().name(), elem.realtime_price()), style);
 
             ListItem::new(span)
         }).collect();
@@ -254,8 +254,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                         .constraints(constraints)
                                         .split(size);
                                 }
-                                'j' => current_index += 1,
-                                'k' => current_index -= 1,
+                                'j' => {
+                                    if current_index + 1 < tickers.len() {
+                                        current_index += 1;
+                                    }
+                                }
+                                'k' => {
+                                    if current_index - 1 >= 0 {
+                                        current_index -= 1;
+                                    }
+                                }
                                 'l' => {
                                     let ticker = tickers.get_mut(current_index).unwrap();
                                     let next = next_interval(*ticker.interval());
