@@ -360,6 +360,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                         get_interval_data(&symbol, interval, tx).await;
                                     });
                                 }
+                                'h' => {
+                                    let tx = tx.clone();
+                                    let ticker = tickers.get_mut(current_index).unwrap();
+
+                                    let prev = previous_interval(*ticker.interval());
+
+                                    let symbol = ticker.identifier().clone();
+                                    let interval = prev.clone();
+
+                                    ticker.set_interval(prev).await;
+
+                                    tokio::spawn(async move {
+                                        get_interval_data(&symbol, interval, tx).await;
+                                    });
+                                }
                                 _ => ()
                             }
                         }
