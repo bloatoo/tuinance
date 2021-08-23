@@ -36,6 +36,16 @@ pub struct Data {
     volume_data: Vec<f64>,
 }
 
+impl Data {
+    pub fn empty() -> Self {
+        Self {
+            price_data: vec![],
+            date_data: vec![],
+            volume_data: vec![],
+        }
+    }
+}
+
 pub struct Ticker {
     data: Vec<(OrderedFloat<f64>, String)>,
     info: Info,

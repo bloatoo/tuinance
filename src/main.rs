@@ -1,4 +1,5 @@
 use tuinance::{
+    app::App,
     config::Config,
     event::*,
     message::*,
@@ -8,7 +9,7 @@ use tuinance::{
 
 use yahoo_finance::{Interval, history, Profile, Streamer, Timestamped};
 use futures::future;
-use std::sync::mpsc::{self, Sender, Receiver};
+use std::sync::mpsc::{self, Sender};
 
 use ordered_float::OrderedFloat;
 
@@ -156,7 +157,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut render_list = true;
     let mut is_first_render = true;
     let mut current_index: usize = 0;
-    let mut current_error = String::new();
+    let current_error = String::new();
 
     loop {
         let ticker = tickers.get(current_index).unwrap();
