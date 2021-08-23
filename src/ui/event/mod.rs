@@ -13,7 +13,7 @@ pub struct EventConfig {
 impl Default for EventConfig {
     fn default() -> EventConfig {
         EventConfig {
-            exit_key: Key::Ctrl('c'),
+            exit_key: Key::Char('q'),
             tick_rate: Duration::from_millis(250),
         }
     }
@@ -48,9 +48,15 @@ impl Events {
                     if let event::Event::Key(key) = event::read().unwrap() {
                         let key = Key::from(key);
 
+
                         event_tx.send(Event::Input(key)).unwrap();
+
+                        if let Key::Char('q') = key {
+                            break;
+                        }
                     }
                 }
+
                 event_tx.send(Event::Tick).unwrap();
             }
         });
