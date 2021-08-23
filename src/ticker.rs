@@ -30,9 +30,14 @@ impl Info {
     }
 }
 
+pub struct Data {
+    price_data: Vec<OrderedFloat<f64>>,
+    date_data: Vec<String>,
+    volume_data: Vec<f64>,
+}
+
 pub struct Ticker {
     data: Vec<(OrderedFloat<f64>, String)>,
-    max_data: Vec<(OrderedFloat<f64>, String)>,
     info: Info,
     interval: Interval,
     identifier: String,
@@ -47,7 +52,6 @@ impl Ticker {
             realtime_price: 0.0,
             info: Info::unknown(),
             data: vec![],
-            max_data: vec![],
         }
     }
 
@@ -57,10 +61,6 @@ impl Ticker {
 
     pub fn interval(&self) -> &Interval {
         &self.interval
-    }
-
-    pub fn max_data(&self) -> &Vec<(OrderedFloat<f64>, String)> {
-        &self.max_data
     }
 
     pub fn set_realtime_price(&mut self, val: f64) {
