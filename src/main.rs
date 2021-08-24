@@ -248,12 +248,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let info_spans = vec![
             Spans::from(
                 Span::styled(ticker.identifier(), Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
-            )
+            ),
+            Spans::default(),
+            Spans::from(vec![
+                Span::styled("Current Price: ", Style::default().fg(Color::Blue)),
+                Span::styled(ticker.realtime_price().to_string(), Style::default().fg(Color::Yellow))
+            ])
         ];
 
         let info_list: Vec<ListItem> = info_spans.iter().map(|elem| ListItem::new(elem.clone())).collect();
 
-        let info = List::new(info_list);
+        let info = List::new(info_list)
+            .block(Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::Rgb(53, 59, 69)))
+            );
 
         terminal.draw(|f| {
             match render_list {
