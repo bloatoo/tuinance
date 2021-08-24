@@ -9,7 +9,7 @@ use tuinance::{
 
 use yahoo_finance::{Interval, history, Profile, Streamer, Timestamped};
 use futures::future;
-use std::sync::mpsc::{self, Sender};
+use std::sync::mpsc::{self, Sender, Receiver};
 
 use ordered_float::OrderedFloat;
 
@@ -52,6 +52,8 @@ use crossterm::{
 
 use std::cmp::Ordering;
 use futures::StreamExt;
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 async fn get_interval_data(symbol: &str, interval: Interval, tx: Sender<Message>) {
     let hist = history::retrieve_interval(symbol, interval).await.unwrap_or(vec![]);
@@ -64,19 +66,6 @@ async fn get_interval_data(symbol: &str, interval: Interval, tx: Sender<Message>
     }
     tx.send(Message::IntervalData((symbol.to_string(), data))).unwrap();
 }
-
-/*async fn init_data(symbol: &str, interval: Interval, tx: Sender<Message>) {
-    let hist = history::retrieve_interval(symbol, interval).await.unwrap_or(vec![]);
-
-    let mut data = vec![];
-
-    for d in hist.iter() {
-        let date = format!("{}", d.datetime().format("%b %e %Y"));
-        data.push((OrderedFloat::from(d.close), date));
-    }
-    tx.send(Message::DataInit((symbol.to_string(), data))).unwrap();
-}*/
-
 
 async fn get_profile(symbol: &str, tx: Sender<Message>) {
     let profile = Profile::load(symbol).await.unwrap();
@@ -105,28 +94,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let tickers_str = conf.tickers();
 
     let (tx, rx) = mpsc::channel::<Message>();
+    let tx_clone = tx.clone();
 
-    let mut tickers: Vec<Ticker> = tickers_str.iter().map(|t| {
+
+    let tickers: Vec<Ticker> = tickers_str.iter().map(|t| {
         Ticker::new(t.to_string())
     }).collect();
 
-    for t in 0..tickers.len() {
-        let t = &tickers[t];
+    let tickers = Arc::new(Mutex::new(tickers));
+    let tickers_clone = tickers.clone();
 
-        let identifier = t.identifier().clone();
-        let identifier_clone = identifier.clone();
-        let interval = t.interval().clone();
-        let tx_clone = tx.clone();
-        let tx_other = tx.clone();
+    std::thread::spawn(move || {
+        event_loop(rx, tickers_clone, tx_clone);
+    });
 
-        tokio::spawn(async move {
-            get_interval_data(&identifier, interval, tx_clone).await;
-        });
-
-        tokio::spawn(async move {
-            get_profile(&identifier_clone, tx_other).await;
-        });
-    }
+    tx.send(Message::Start).unwrap();
 
     terminal.clear()?;
     let mut size = terminal.size()?;
@@ -160,6 +142,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let current_error = String::new();
 
     loop {
+        let tickers_lock = tickers.lock().await;
+        let mut tickers = tickers_lock.clone();
+        drop(tickers_lock);
+
         let ticker = tickers.get(current_index).unwrap();
         let data = ticker.price_data();
         let y = ticker.date_data();
@@ -275,49 +261,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         })?;
 
-
-        if let Ok(msg) = rx.try_recv() {
-            use Message::*;
-
-            match msg {
-                DataInit((symbol, data)) => {
-                    let ticker = tickers
-                        .iter_mut()
-                        .find(|t| t.identifier() == &symbol)
-                        .unwrap();
-
-                    ticker.init_data(data);
-                }
-
-                ProfileInit((symbol, p)) => {
-                    let ticker = tickers
-                        .iter_mut()
-                        .find(|t| t.identifier() == &symbol)
-                        .unwrap();
-
-                    ticker.init_info(p);
-                }
-
-                IntervalData((symbol, data)) => {
-                    let ticker = tickers
-                        .iter_mut()
-                        .find(|t| t.identifier() == &symbol)
-                        .unwrap();
-
-                    ticker.update_data(data);
-                }
-
-                PriceUpdate((symbol, price)) => {
-                    let ticker = tickers
-                        .iter_mut()
-                        .find(|t| t.identifier() == &symbol)
-                        .unwrap();
-
-                    ticker.set_realtime_price(price);
-                }
-            }
-        }
-
         if let Ok(ev) = events.next() {
             match ev {
                 Event::Input(i) => {
@@ -355,7 +298,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     let symbol = ticker.identifier().clone();
                                     let interval = next.clone();
 
-                                    ticker.set_interval(next).await;
+                                    tx.send(Message::SetInterval((symbol.clone(), next))).unwrap();
+                                    //ticker.set_interval(next).await;
 
                                     tokio::spawn(async move {
                                         get_interval_data(&symbol, interval, tx).await;
@@ -370,7 +314,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                     let symbol = ticker.identifier().clone();
                                     let interval = prev.clone();
 
-                                    ticker.set_interval(prev).await;
+                                    tx.send(Message::SetInterval((symbol.clone(), prev))).unwrap();
 
                                     tokio::spawn(async move {
                                         get_interval_data(&symbol, interval, tx).await;
@@ -389,6 +333,86 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     exit()?;
 
     Ok(())
+}
+
+#[tokio::main]
+async fn event_loop(rx: Receiver<Message>, tickers: Arc<Mutex<Vec<Ticker>>>, tx: Sender<Message>) {
+    loop {
+        let msg = match rx.recv() {
+            Ok(msg) => msg,
+            Err(_) => break,
+        };
+
+        let mut tickers = tickers.lock().await;
+
+        use Message::*;
+
+        match msg {
+            DataInit((symbol, data)) => {
+                let ticker = tickers
+                    .iter_mut()
+                    .find(|t| t.identifier() == &symbol)
+                    .unwrap();
+
+                ticker.init_data(data);
+            }
+
+            SetInterval((symbol, interval)) => {
+                let ticker = tickers
+                    .iter_mut()
+                    .find(|t| t.identifier() == &symbol)
+                    .unwrap();
+
+                ticker.set_interval(interval);
+            }
+
+            ProfileInit((symbol, p)) => {
+                let ticker = tickers
+                    .iter_mut()
+                    .find(|t| t.identifier() == &symbol)
+                    .unwrap();
+
+                ticker.init_info(p);
+            }
+
+            IntervalData((symbol, data)) => {
+                let ticker = tickers
+                    .iter_mut()
+                    .find(|t| t.identifier() == &symbol)
+                    .unwrap();
+
+                ticker.update_data(data);
+            }
+
+            PriceUpdate((symbol, price)) => {
+                let ticker = tickers
+                    .iter_mut()
+                    .find(|t| t.identifier() == &symbol)
+                    .unwrap();
+
+                ticker.set_realtime_price(price);
+            }
+            Start => {
+                for t in 0..tickers.len() {
+                    let t = &tickers[t];
+
+                    let identifier = t.identifier().clone();
+                    let identifier_clone = identifier.clone();
+                    let interval = t.interval().clone();
+                    let tx_clone = tx.clone();
+                    let tx_other = tx.clone();
+
+                    tokio::spawn(async move {
+                        get_interval_data(&identifier, interval, tx_clone).await;
+                    });
+
+                    tokio::spawn(async move {
+                        get_profile(&identifier_clone, tx_other).await;
+                    });
+                }
+            }
+        }
+    }
 }
 
 fn exit() -> Result<(), Box<dyn std::error::Error>> {

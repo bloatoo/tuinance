@@ -1,6 +1,6 @@
 use ordered_float::OrderedFloat;
 use yahoo_finance::{Profile, history, Interval, Timestamped};
-
+#[derive(Clone, Debug)]
 pub struct Info {
     name: String,
 }
@@ -30,6 +30,7 @@ impl Info {
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct Data {
     price_data: Vec<OrderedFloat<f64>>,
     date_data: Vec<String>,
@@ -46,6 +47,7 @@ impl Data {
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct Ticker {
     data: Vec<(OrderedFloat<f64>, String)>,
     info: Info,
@@ -90,7 +92,7 @@ impl Ticker {
         }
     }
 
-    pub async fn set_interval(&mut self, interval: Interval) {
+    pub fn set_interval(&mut self, interval: Interval) {
         self.interval = interval;
     }
 
