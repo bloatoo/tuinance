@@ -4,7 +4,8 @@ use tuinance::{
     event::*,
     message::*,
     ticker::Ticker,
-    utils::*
+    utils::*,
+    ui::utils::generate_chunks
 };
 
 use yahoo_finance::{Interval, history, Profile, Streamer, Timestamped};
@@ -18,6 +19,7 @@ use tui::{
     layout::{
         Constraint,
         Direction,
+        Rect,
         Layout,
     },
     symbols,
@@ -26,7 +28,7 @@ use tui::{
         Modifier,
         Color
     },
-    text::Span,
+    text::{Span, Spans},
     widgets::{
         Axis,
         Borders,
@@ -128,11 +130,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await;
     });
 
-    let mut chunks = Layout::default()
+    let mut chunks: (Vec<Rect>, Rect) = (vec![], Rect::new(0, 0, 0, 0));
+
+    chunks.1 = Layout::default()
         .direction(Direction::Horizontal)
         .constraints(vec![
             Constraint::Percentage(100)
-        ]).split(size);
+        ]).split(size)[0];
 
     let p = &OrderedFloat::from(0.0);
 
@@ -235,28 +239,31 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         if let Ok(s) = terminal.size() {
             if is_first_render || size != s {
-                let constraints = match render_list {
-                    true => vec![Constraint::Percentage(20), Constraint::Percentage(80)],
-                    false => vec![Constraint::Percentage(100)]
-                };
-                chunks = Layout::default()
-                    .direction(Direction::Horizontal)
-                    .constraints(constraints)
-                    .split(s);
-
+                chunks = generate_chunks(s, render_list);
                 is_first_render = false;
                 size = s;
             }
         }
 
+        let info_spans = vec![
+            Spans::from(
+                Span::styled(ticker.identifier(), Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
+            )
+        ];
+
+        let info_list: Vec<ListItem> = info_spans.iter().map(|elem| ListItem::new(elem.clone())).collect();
+
+        let info = List::new(info_list);
+
         terminal.draw(|f| {
             match render_list {
                 true => {
-                    f.render_widget(chart, chunks[1]);
-                    f.render_widget(list, chunks[0]);
+                    f.render_widget(chart, chunks.1);
+                    f.render_widget(list, chunks.0[0]);
+                    f.render_widget(info, chunks.0[1]);
                 }
                 false => {
-                    f.render_widget(chart, chunks[0]);
+                    f.render_widget(chart, chunks.1);
                 }
             }
         })?;
@@ -270,14 +277,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 'q' => break,
                                 'z' => {
                                     render_list = !render_list;
-                                    let constraints = match render_list {
-                                        true => vec![Constraint::Percentage(20), Constraint::Percentage(80)],
-                                        false => vec![Constraint::Percentage(100)]
-                                    };
-                                    chunks = Layout::default()
-                                        .direction(Direction::Horizontal)
-                                        .constraints(constraints)
-                                        .split(size);
+                                    chunks = generate_chunks(size, render_list);
                                 }
                                 'j' => {
                                     if current_index + 1 < tickers.len() {
