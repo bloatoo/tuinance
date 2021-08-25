@@ -186,7 +186,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 false => elem.info().name()
             };
 
-            let span = Span::styled(format!("{}: {:.3}", name, elem.realtime_price()), style);
+            let span = Span::styled(name, style);
 
             ListItem::new(span)
         }).collect();
@@ -246,13 +246,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         let info_spans = vec![
-            Spans::from(
-                Span::styled(ticker.identifier(), Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))
-            ),
-            Spans::default(),
             Spans::from(vec![
                 Span::styled("Current Price: ", Style::default().fg(Color::Blue)),
-                Span::styled(ticker.realtime_price().to_string(), Style::default().fg(Color::Yellow))
+                Span::styled(format!("${}", ticker.realtime_price().to_string()), Style::default().fg(Color::Yellow))
             ])
         ];
 
@@ -261,6 +257,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let info = List::new(info_list)
             .block(Block::default()
                 .borders(Borders::ALL)
+                .title(Span::styled(ticker.identifier(), Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)))
                 .border_style(Style::default().fg(Color::Rgb(53, 59, 69)))
             );
 
