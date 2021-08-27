@@ -28,6 +28,7 @@ pub fn previous_interval(curr: Interval) -> Interval {
         _1y => _6mo,
         _6mo => _3mo,
         _3mo => _1mo,
+        _1mo => _5d,
         _5d => _ytd,
 
         _ => _ytd,
