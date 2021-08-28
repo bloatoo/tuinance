@@ -3,7 +3,7 @@ use tuinance::{
     config::Config,
     event::*,
     message::*,
-    ticker::Ticker,
+    ticker::{Data, Ticker},
     utils::*,
     ui::utils::generate_chunks
 };
@@ -57,21 +57,23 @@ use futures::StreamExt;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-async fn get_interval_data(symbol: &str, interval: Interval, tx: Sender<Message>, graph_type: GraphType) {
+async fn get_interval_data(symbol: &str, interval: Interval, tx: Sender<Message>) {
     let hist = history::retrieve_interval(symbol, interval).await.unwrap_or(vec![]);
 
-    let mut data = vec![];
+    let mut price_data = vec![];
+    let mut date_data = vec![];
+    let mut volume_data = vec![];
 
     for d in hist.iter() {
         let date = format!("{}", d.datetime().format("%b %e %Y"));
-        let b = match graph_type {
-            GraphType::Price => d.close,
-            GraphType::Volume => d.volume.unwrap() as f64
-        };
-
-        data.push((OrderedFloat::from(b), date));
+        date_data.push(date);
+        
+        price_data.push(OrderedFloat::from(d.close));
+        volume_data.push(d.volume.unwrap());
     }
-    tx.send(Message::IntervalData((symbol.to_string(), data))).unwrap();
+
+    let data = Data::new(price_data, date_data, volume_data);
+    tx.send(Message::DataUpdate((symbol.to_string(), data))).unwrap();
 }
 
 async fn get_profile(symbol: &str, tx: Sender<Message>) {
@@ -158,7 +160,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         drop(tickers_lock);
 
         let ticker = tickers.get(current_index).unwrap();
-        let data = ticker.price_data();
+
+        let data = match graph_type {
+            GraphType::Price => ticker.price_data(),
+            GraphType::Volume => ticker.volume_data_f64(),
+        };
+
         let y = ticker.date_data();
 
         let len = data.len();
@@ -315,13 +322,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                                     let symbol = ticker.identifier().clone();
                                     let interval = next.clone();
-                                    let gt = graph_type.clone();
 
                                     tx.send(Message::SetInterval((symbol.clone(), next))).unwrap();
                                     //ticker.set_interval(next).await;
 
                                     tokio::spawn(async move {
-                                        get_interval_data(&symbol, interval, tx, gt).await;
+                                        get_interval_data(&symbol, interval, tx).await;
                                     });
                                 }
                                 'h' => {
@@ -332,12 +338,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                                     let symbol = ticker.identifier().clone();
                                     let interval = prev.clone();
-                                    let gt = graph_type.clone();
 
                                     tx.send(Message::SetInterval((symbol.clone(), prev))).unwrap();
 
                                     tokio::spawn(async move {
-                                        get_interval_data(&symbol, interval, tx, gt).await;
+                                        get_interval_data(&symbol, interval, tx).await;
                                     });
                                 }
 
@@ -347,13 +352,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                                         GraphType::Volume => GraphType::Price
                                     };
                                     let tx = tx.clone();
-                                    let gt = graph_type.clone();
 
                                     let ident = ticker.identifier().clone();
                                     let interval = ticker.interval().clone();
 
                                     tokio::spawn(async move {
-                                        get_interval_data(&ident, interval, tx, gt).await;
+                                        get_interval_data(&ident, interval, tx).await;
                                     });
                                 }
                                 _ => ()
@@ -384,15 +388,6 @@ async fn event_loop(rx: Receiver<Message>, tickers: Arc<Mutex<Vec<Ticker>>>, tx:
         use Message::*;
 
         match msg {
-            DataInit((symbol, data)) => {
-                let ticker = tickers
-                    .iter_mut()
-                    .find(|t| t.identifier() == &symbol)
-                    .unwrap();
-
-                ticker.init_data(data);
-            }
-
             SetInterval((symbol, interval)) => {
                 let ticker = tickers
                     .iter_mut()
@@ -411,13 +406,13 @@ async fn event_loop(rx: Receiver<Message>, tickers: Arc<Mutex<Vec<Ticker>>>, tx:
                 ticker.init_info(p);
             }
 
-            IntervalData((symbol, data)) => {
+            DataUpdate((symbol, data)) => {
                 let ticker = tickers
                     .iter_mut()
                     .find(|t| t.identifier() == &symbol)
                     .unwrap();
 
-                ticker.update_data(data);
+                ticker.set_data(data);
             }
 
             PriceUpdate((symbol, price)) => {
@@ -439,7 +434,7 @@ async fn event_loop(rx: Receiver<Message>, tickers: Arc<Mutex<Vec<Ticker>>>, tx:
                     let tx_other = tx.clone();
 
                     tokio::spawn(async move {
-                        get_interval_data(&identifier, interval, tx_clone, GraphType::Price).await;
+                        get_interval_data(&identifier, interval, tx_clone).await;
                     });
 
                     tokio::spawn(async move {

@@ -34,7 +34,7 @@ impl Info {
 pub struct Data {
     price_data: Vec<OrderedFloat<f64>>,
     date_data: Vec<String>,
-    volume_data: Vec<f64>,
+    volume_data: Vec<u64>,
 }
 
 impl Data {
@@ -45,11 +45,35 @@ impl Data {
             volume_data: vec![],
         }
     }
+
+    pub fn new(price_data: Vec<OrderedFloat<f64>>, date_data: Vec<String>, volume_data: Vec<u64>) -> Self {
+        Self {
+            price_data,
+            date_data,
+            volume_data,
+        }
+    }
+
+    pub fn price_data_mut(&mut self) -> &mut Vec<OrderedFloat<f64>> {
+        &mut self.price_data
+    }
+
+    pub fn price_data(&self) -> &Vec<OrderedFloat<f64>> {
+        &self.price_data
+    }
+
+    pub fn volume_data(&self) -> &Vec<u64> {
+        &self.volume_data
+    }
+
+    pub fn set_price_data(&mut self, data: Vec<OrderedFloat<f64>>) {
+        self.price_data = data;
+    }
 }
 
 #[derive(Clone, Debug)]
 pub struct Ticker {
-    data: Vec<(OrderedFloat<f64>, String)>,
+    data: Data,
     info: Info,
     interval: Interval,
     identifier: String,
@@ -63,7 +87,7 @@ impl Ticker {
             interval: Interval::_6mo,
             realtime_price: 0.0,
             info: Info::unknown(),
-            data: vec![],
+            data: Data::empty(),
         }
     }
 
@@ -83,6 +107,17 @@ impl Ticker {
         &self.info
     }
 
+    pub fn volume_data(&self) -> &Vec<u64> {
+        &self.data.volume_data()
+    }
+
+    pub fn volume_data_f64(&self) -> Vec<OrderedFloat<f64>> {
+        self.data.volume_data()
+            .iter()
+            .map(|elem| OrderedFloat::from(*elem as f64))
+            .collect()
+    }
+
     pub fn realtime_price(&self) -> f64 {
         if self.realtime_price == 0.0 {
             let placeholder = &OrderedFloat::from(0.0);
@@ -90,6 +125,10 @@ impl Ticker {
         } else {
             self.realtime_price
         }
+    }
+
+    pub fn set_data(&mut self, data: Data) {
+        self.data = data;
     }
 
     pub fn set_interval(&mut self, interval: Interval) {
@@ -101,15 +140,6 @@ impl Ticker {
         self.info = Info::from(profile);
     }
 
-    pub fn init_data(&mut self, data: Vec<(OrderedFloat<f64>, String)>) {
-        self.data = data;
-        self.realtime_price = f64::from(*self.data.last().unwrap().0);
-    }
-
-    pub fn update_data(&mut self, data: Vec<(OrderedFloat<f64>, String)>) {
-        self.data = data;
-    }
-    
     pub fn init_info(&mut self, profile: Profile) {
         self.info = Info::from(profile);
     }
@@ -117,39 +147,34 @@ impl Ticker {
     pub async fn get_data(&mut self) -> Result<(), yahoo_finance::Error> {
         let hist = history::retrieve_interval(&self.identifier, self.interval).await?;
 
-        let mut data = vec![];
+        let mut price_data = vec![];
+        let mut date_data = vec![];
+        let mut volume_data = vec![];
 
         for d in hist.iter() {
-            let date = format!("{}", d.datetime().format("%b %e %Y"));
-            data.push((OrderedFloat::from(d.close), date));
+            price_data.push(OrderedFloat::from(d.close));
+            date_data.push(format!("{}", d.datetime().format("%b %e %Y")));
+            volume_data.push(d.volume.unwrap());
         }
 
-        self.data = data.clone();
+        self.data = Data::new(price_data, date_data, volume_data);
+        
         Ok(())
-
-        /*self.max_data = data;
-
-        let days = interval_to_days(self.interval) as usize;
-
-        let max_len = self.max_data.len();
-
-        if days > max_len || days == 0 {
-            self.data = self.max_data.clone();
-            return;
-        }
-
-        self.data = self.max_data[max_len - days..max_len].to_vec();*/
     }
 
-    pub fn data(&self) -> &Vec<(OrderedFloat<f64>, String)> {
+    pub fn data(&self) -> &Data {
         &self.data
     }
 
-    pub fn price_data(&self) -> Vec<OrderedFloat<f64>> {
-        self.data.iter().map(|elem| elem.0).collect()
+    pub fn data_mut(&mut self) -> &mut Data {
+        &mut self.data
     }
 
-    pub fn date_data(&self) -> Vec<String> {
-        self.data.iter().map(|elem| elem.1.clone()).collect()
+    pub fn price_data(&self) -> Vec<OrderedFloat<f64>> {
+        self.data.price_data().clone()
+    }
+
+    pub fn date_data(&self) -> &Vec<String> {
+        &self.data.date_data
     }
 }
