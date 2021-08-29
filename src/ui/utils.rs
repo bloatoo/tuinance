@@ -5,17 +5,25 @@ use tui::layout::{
     Rect,
 };
 
-pub fn generate_chunks(term_size: Rect, render_list: bool) -> (Vec<Rect>, Rect) {
+pub fn generate_chunks(term_size: Rect, render_list: bool) -> (Vec<Rect>, Vec<Rect>) {
     match render_list {
         true => {
             let constraints = vec![
-                Constraint::Percentage(25),
-                Constraint::Percentage(75)
+                Constraint::Percentage(20),
+                Constraint::Percentage(80)
             ];
             let layout = Layout::default()
                 .direction(Direction::Horizontal)
-                .constraints(constraints)
+                .constraints(constraints.clone())
                 .split(term_size);
+
+            let main_panes = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints(vec![
+                    Constraint::Percentage(80),
+                    Constraint::Percentage(20),
+                ])
+                .split(layout[1]);
 
             let side_panes = Layout::default()
                 .direction(Direction::Vertical)
@@ -24,7 +32,7 @@ pub fn generate_chunks(term_size: Rect, render_list: bool) -> (Vec<Rect>, Rect) 
                     Constraint::Percentage(50),
                 ]).split(layout[0]);
 
-            (side_panes, layout[1])
+            (side_panes, main_panes)
         }
         false => {
             let constraints = vec![
@@ -35,7 +43,8 @@ pub fn generate_chunks(term_size: Rect, render_list: bool) -> (Vec<Rect>, Rect) 
                 .direction(Direction::Horizontal)
                 .constraints(constraints)
                 .split(term_size);
-            (vec![], layout[0])
+
+            (vec![], layout)
         }
     }
 }

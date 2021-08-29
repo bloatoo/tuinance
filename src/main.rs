@@ -37,6 +37,7 @@ use tui::{
         ListItem,
         Chart,
         Dataset,
+        Sparkline,
         GraphType as TuiGraphType,
     },
     Terminal,
@@ -105,7 +106,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (tx, rx) = mpsc::channel::<Message>();
     let tx_clone = tx.clone();
 
-
     let tickers: Vec<Ticker> = tickers_str.iter().map(|t| {
         Ticker::new(t.to_string())
     }).collect();
@@ -139,13 +139,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await;
     });
 
-    let mut chunks: (Vec<Rect>, Rect) = (vec![], Rect::new(0, 0, 0, 0));
+    let mut chunks: (Vec<Rect>, Vec<Rect>) = (vec![], vec![]);
 
     chunks.1 = Layout::default()
         .direction(Direction::Horizontal)
         .constraints(vec![
-            Constraint::Percentage(100)
-        ]).split(size)[0];
+            Constraint::Percentage(80),
+            Constraint::Percentage(20)
+        ]).split(size);
 
     let p = &OrderedFloat::from(0.0);
 
@@ -163,8 +164,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         let data = match graph_type {
             GraphType::Price => ticker.price_data(),
-            GraphType::Volume => ticker.volume_data_f64(),
+            GraphType::Volume => ticker.volume_data_f64()
         };
+
+        let volume_data = ticker.volume_data();
 
         let y = ticker.date_data();
 
@@ -280,15 +283,30 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .border_style(Style::default().fg(Color::Rgb(53, 59, 69)))
             );
 
+        let barchart = Sparkline::default()
+            .block(Block::default()
+                   .title(Span::styled("Volume", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)))
+                   .borders(Borders::ALL)
+                   .border_style(
+                       Style::default()
+                       .fg(Color::Rgb(53, 59, 69))
+                    )
+            )
+            .data(&volume_data)
+            .style(Style::default().fg(Color::Magenta));
+            /*.bar_style(Style::default().fg(Color::Yellow))
+            .value_style(Style::default().fg(Color::Black).bg(Color::Yellow));*/
+
         terminal.draw(|f| {
             match render_list {
                 true => {
-                    f.render_widget(chart, chunks.1);
+                    f.render_widget(chart, chunks.1[0]);
                     f.render_widget(list, chunks.0[0]);
                     f.render_widget(info, chunks.0[1]);
+                    f.render_widget(barchart, chunks.1[1]);
                 }
                 false => {
-                    f.render_widget(chart, chunks.1);
+                    f.render_widget(chart, chunks.1[0]);
                 }
             }
         })?;
