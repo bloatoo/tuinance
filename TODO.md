@@ -7,6 +7,7 @@
 - [x] Volume charts
 - [x] Add UI chunk below graph to show a bar chart with volume data
 
+- [ ] Show change percentage for each interval
 - [ ] Add cycling between dates in price and volume data (?)
 - [ ] View multiple stocks at once, in one graph
 
