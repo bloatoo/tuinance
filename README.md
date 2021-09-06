@@ -1,6 +1,6 @@
 # tuinance
 
-Tuinance is a performant tool to display financial data, written completely in Rust.
+Tuinance is a performant TUI program to display financial data, written completely in Rust.
 
 All data is gathered through the Yahoo Finance API.
 
