@@ -18,6 +18,8 @@ cargo install --path .
 
 Make sure the output directory is in your $PATH.
 
+You should now be able to run Tuinance via the `tuinance` command.
+
 ### Configuration
 Tuinance is configured through a configuration file located at `~/.config/tuinance.toml`.
 
